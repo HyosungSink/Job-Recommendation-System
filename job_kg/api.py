@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .models import GraphResponse, JobSummary, RecommendationRequest, RecommendationResponse, SearchResponse, StatsResponse, TopItem
+from .models import GraphInsightsResponse, GraphResponse, JobSummary, RecommendationRequest, RecommendationResponse, SearchResponse, StatsResponse, TopItem
 from .service import create_service
 
 app = FastAPI(title="Knowledge Graph Job Recommendation System", version="1.0.0")
@@ -88,6 +88,8 @@ def recommend_by_profile(profile: RecommendationRequest) -> RecommendationRespon
     normalized_profile = profile.model_copy(
         update={
             "skills": service.normalize_skills(profile.skills),
+            "keywords": service.normalize_keywords(profile.keywords),
+            "preferred_benefits": service.normalize_benefits(profile.preferred_benefits),
             "top_k": max(1, min(profile.top_k, 50)),
         }
     )
@@ -98,3 +100,8 @@ def recommend_by_profile(profile: RecommendationRequest) -> RecommendationRespon
 @app.get("/skills/top", response_model=list[TopItem])
 def top_skills(limit: int = Query(default=20, ge=1, le=100)) -> list[TopItem]:
     return create_service().repository.top_skills(limit=limit)
+
+
+@app.get("/graph/insights", response_model=GraphInsightsResponse)
+def graph_insights(limit: int = Query(default=10, ge=1, le=50)) -> GraphInsightsResponse:
+    return create_service().repository.graph_insights(limit=limit)

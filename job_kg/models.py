@@ -66,6 +66,8 @@ class RecommendationRequest(BaseModel):
     experience: str | None = None
     min_salary: int | None = None
     keywords: list[str] = Field(default_factory=list)
+    preferred_benefits: list[str] = Field(default_factory=list)
+    seed_job_id: str | None = None
     top_k: int = 10
 
 
@@ -74,6 +76,7 @@ class RecommendationItem(JobSummary):
     matched_skills: list[str] = Field(default_factory=list)
     missing_skills: list[str] = Field(default_factory=list)
     reasons: list[str] = Field(default_factory=list)
+    score_breakdown: dict[str, float] = Field(default_factory=dict)
 
 
 class SearchResponse(BaseModel):
@@ -116,8 +119,17 @@ class StatsResponse(BaseModel):
     total_cities: int
     total_industries: int
     average_skills_per_job: float
+    average_benefits_per_job: float = 0.0
+    total_similarity_edges: int = 0
 
 
 class TopItem(BaseModel):
     name: str
     count: int
+
+
+class GraphInsightsResponse(BaseModel):
+    top_skills: list[TopItem] = Field(default_factory=list)
+    top_cities: list[TopItem] = Field(default_factory=list)
+    top_industries: list[TopItem] = Field(default_factory=list)
+    top_benefits: list[TopItem] = Field(default_factory=list)

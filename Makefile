@@ -1,9 +1,12 @@
 PYTHON ?= python
 
-.PHONY: install crawl import-graph run-api compile
+.PHONY: install install-dev crawl import-graph run-api compile test check
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
+
+install-dev:
+	$(PYTHON) -m pip install -r requirements-dev.txt
 
 crawl:
 	$(PYTHON) -m data_pipeline
@@ -16,3 +19,8 @@ run-api:
 
 compile:
 	$(PYTHON) -m compileall job_kg data_pipeline scripts
+
+test:
+	pytest
+
+check: compile test

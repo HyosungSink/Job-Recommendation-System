@@ -89,6 +89,17 @@
         margin: 6px 6px 0 0;
         padding: 4px 8px;
       }
+      .section-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: #4c5a70;
+        margin-top: 10px;
+      }
+      .tiny {
+        color: #6c7890;
+        font-size: 13px;
+        line-height: 1.6;
+      }
       #graph {
         height: 520px;
       }
@@ -113,6 +124,8 @@
         <input id="city" value="上海" />
         <label>最低薪资 k/月</label>
         <input id="salary" value="10" />
+        <label>偏好福利（逗号分隔）</label>
+        <input id="benefits" value="带薪年假, 弹性工作" />
         <button onclick="recommend()">生成推荐</button>
         <label>岗位 ID 图谱</label>
         <input id="jobId" value="171714274" />
@@ -121,6 +134,10 @@
       <section class="card">
         <h2>推荐结果</h2>
         <div id="results">正在加载推荐结果...</div>
+      </section>
+      <section class="card" style="grid-column: 1 / -1">
+        <h2>图谱洞察</h2>
+        <div id="insights" class="tiny">正在加载图谱洞察...</div>
       </section>
       <section class="card" style="grid-column: 1 / -1">
         <h2>岗位一跳知识图谱</h2>
@@ -142,6 +159,7 @@
           skills: splitInput(document.getElementById("skills").value),
           desired_city: document.getElementById("city").value.trim() || null,
           min_salary: Number(document.getElementById("salary").value || 0),
+          preferred_benefits: splitInput(document.getElementById("benefits").value),
           top_k: 8,
         };
         const response = await fetch("/recommend/profile", {
@@ -157,6 +175,11 @@
                 <div class="title">${item.title}</div>
                 <div class="meta">${item.company_name} · ${item.city_name} · ${item.industry_name} · ${item.salary_min}-${item.salary_max}k · 得分 ${item.score}</div>
                 <div>${item.reasons.map((reason) => `<span class="tag">${reason}</span>`).join("")}</div>
+                <div class="section-title">评分拆解</div>
+                <div>${Object.entries(item.score_breakdown || {})
+                  .filter(([, score]) => score > 0)
+                  .map(([name, score]) => `<span class="tag">${name}: ${score}</span>`)
+                  .join("")}</div>
                 <div>${item.skills.slice(0, 8).map((skill) => `<span class="tag">${skill}</span>`).join("")}</div>
                 <button class="secondary" onclick="setGraphJob('${item.job_id}')">查看该岗位图谱</button>
               </article>
@@ -164,6 +187,27 @@
           )
           .join("");
         document.getElementById("results").innerHTML = html || "暂无匹配岗位";
+      }
+
+      async function loadInsights() {
+        const response = await fetch("/graph/insights?limit=8");
+        const data = await response.json();
+        const sections = [
+          ["热门技能", data.top_skills || []],
+          ["热门城市", data.top_cities || []],
+          ["热门行业", data.top_industries || []],
+          ["热门福利", data.top_benefits || []],
+        ];
+        document.getElementById("insights").innerHTML = sections
+          .map(
+            ([title, items]) => `
+              <div class="section-title">${title}</div>
+              <div>${items
+                .map((item) => `<span class="tag">${item.name} (${item.count})</span>`)
+                .join("")}</div>
+            `
+          )
+          .join("");
       }
 
       function setGraphJob(jobId) {
@@ -205,7 +249,7 @@
         });
       }
 
-      recommend().then(drawGraph);
+      Promise.all([recommend(), drawGraph(), loadInsights()]);
       window.addEventListener("resize", () => graphChart.resize());
     </script>
   </body>

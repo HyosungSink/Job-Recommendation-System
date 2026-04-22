@@ -21,9 +21,11 @@
 - **知识图谱建模**：将岗位、公司、城市、行业、技能等实体结构化建图
 - **画像推荐**：根据用户技能、目标城市、行业、薪资等条件生成推荐
 - **相似岗位推荐**：根据共享技能、同城、同行业、同公司关系计算相似职位
+- **图谱洞察**：输出热门技能、城市、行业、福利等图谱统计视图
 - **岗位检索**：支持关键词、城市、行业、学历、经验、技能、薪资筛选
 - **图谱可视化**：支持查看某个岗位的一跳知识图谱
 - **原生部署**：Neo4j 使用本机服务方式启动，避免容器依赖
+- **工程化基础**：内置 `pytest`、CI 工作流和开发命令
 
 ## 技术栈
 
@@ -84,9 +86,12 @@ data_pipeline/
 │   └── neo4j-java-runner.sh    # Neo4j Java 启动包装脚本
 ├── docs/
 │   └── repository-structure.md # 仓库结构补充说明
+├── tests/                      # 单元测试与 API 测试
+├── .github/workflows/          # 持续集成配置
 ├── Makefile                    # 常用命令封装
 ├── pyproject.toml              # Python 项目元信息
 ├── requirements.txt            # 根依赖
+├── requirements-dev.txt        # 开发与测试依赖
 └── README.md
 ```
 
@@ -138,6 +143,9 @@ data_pipeline/
 - `(:Job)-[:HAS_BENEFIT]->(:Benefit)`
 - `(:Job)-[:HAS_KEYWORD]->(:Keyword)`
 - `(:Company)-[:BELONGS_TO]->(:Industry)`
+- `(:Job)-[:SIMILAR_TO]->(:Job)`
+
+其中 `SIMILAR_TO` 为导入阶段自动生成的岗位相似边，综合考虑共享技能、共享福利、同城、同行业和同公司信息。
 
 ### 3. 实体抽取设计
 
@@ -164,19 +172,25 @@ data_pipeline/
 根据用户提交的画像进行评分，核心考虑因素包括：
 
 - 匹配技能数量
+- 匹配技能覆盖率
 - 匹配关键词数量
+- 偏好福利匹配数量
 - 目标城市是否一致
 - 目标行业是否一致
 - 最低薪资要求是否满足
 - 学历要求与经验要求是否满足
+- 与种子岗位的图谱关联度
 
 当前画像推荐的评分权重大致为：
 
 - 技能匹配：`4.0 * 匹配技能数`
+- 技能覆盖率：`2.0 * 匹配技能覆盖率`
 - 关键词匹配：`1.5 * 匹配关键词数`
+- 福利偏好匹配：`1.2 * 匹配福利数`
 - 城市匹配：`+3.0`
 - 行业匹配：`+2.5`
 - 薪资达标：`+1.0`
+- 种子岗位图关联：`0.35 * 相似边分数`
 
 推荐结果中会返回：
 
@@ -184,12 +198,14 @@ data_pipeline/
 - `matched_skills`
 - `missing_skills`
 - `reasons`
+- `score_breakdown`
 
 #### 相似岗位推荐
 
 给定一个岗位，系统会优先基于以下图关系寻找相似职位：
 
 - 共享技能
+- 共享福利
 - 同城
 - 同行业
 - 同公司
@@ -239,6 +255,7 @@ data_pipeline/
 运维与导入脚本目录。
 
 - `import_neo4j.py`：从 `datasets/processed/jobs.json` 导入 Neo4j
+- `import_neo4j.py`：导入完成后会自动重建相似岗位边
 - `install_neo4j_launchd.sh`：在 macOS 上注册本机 Neo4j 启动服务
 - `neo4j-java-runner.sh`：为本机 Neo4j 进程设置 Java 启动参数
 
@@ -516,6 +533,8 @@ POST /recommend/profile
   "experience": "3年",
   "min_salary": 10,
   "keywords": ["大模型", "NLP"],
+  "preferred_benefits": ["带薪年假", "弹性工作"],
+  "seed_job_id": "171700045",
   "top_k": 5
 }
 ```
@@ -529,6 +548,7 @@ curl -X POST http://127.0.0.1:8000/recommend/profile \
     "skills": ["Python", "PyTorch", "机器学习"],
     "desired_city": "上海",
     "min_salary": 10,
+    "preferred_benefits": ["带薪年假", "弹性工作"],
     "top_k": 5
   }'
 ```
@@ -542,6 +562,14 @@ GET /skills/top
 参数：
 
 - `limit`
+
+### 图谱洞察
+
+```http
+GET /graph/insights
+```
+
+返回热门技能、城市、行业、福利等图谱洞察信息。
 
 ## 关键数据字段
 
@@ -575,6 +603,28 @@ python -m compileall job_kg data_pipeline scripts
 ```bash
 make compile
 ```
+
+### 运行测试
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+或：
+
+```bash
+make install-dev
+make test
+```
+
+### 持续集成
+
+仓库内置 GitHub Actions 工作流，默认执行：
+
+- Python 依赖安装
+- `compileall` 编译检查
+- `pytest` 自动测试
 
 ### 重新导入并验证接口
 
@@ -641,4 +691,3 @@ python scripts/import_neo4j.py
 - 引入更细粒度的技能本体
 - 增强岗位描述语义抽取
 - 加入用户行为反馈优化推荐排序
-
